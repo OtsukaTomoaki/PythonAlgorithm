@@ -1,3 +1,6 @@
+from unittest import result
+
+
 goal = [
     0b111000000, 0b000111000, 0b000000111, 0b100100100,
     0b010010010, 0b001001001, 0b100010001, 0b001010100
@@ -24,9 +27,13 @@ def minmax(p1, p2, turn):
     w = [i for i in range(9) if (board & (1 << i)) == 0]
 
     if turn: #自分の手番の時は最小値を選ぶ
-        return min([minmax(p2, p1 | (1 << i), not turn) for i in w])
+        result = min([minmax(p2, p1 | (1 << i), not turn) for i in w])
+        print(result, bin(p1), bin(p2), turn)
+        return result
     else:
-        return max([minmax(p2, p1 | (1 << i), not turn) for i in w])
+        result = max([minmax(p2, p1 | (1 << i), not turn) for i in w])
+        print(result, bin(p1), bin(p2), turn)
+        return result
 
 #交互におく
 def play(p1, p2, turn):
