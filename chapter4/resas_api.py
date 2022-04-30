@@ -1,34 +1,31 @@
-import environ
 import os
+from dotenv import load_dotenv
 import requests
 import json
 import time
 import copy
 from typing import Tuple
 
-env = environ.Env()
-base_dir = os.path.dirname(__file__)
-env.read_env(os.path.join(base_dir,'.env'))
+load_dotenv()
 
-POPULATION_GOAL = 10000000
+POPULATION_GOAL = 20000000
 
 class PopulationCalculator:
     answer_list: list = []
-    min_diff_total: int = 10000000
+    min_diff_total: int = POPULATION_GOAL
 
     def __init__(self) -> None:
         pass
 
 class PopulationProvider():
     RESAS_API_ENDPOINT: str = 'https://opendata.resas-portal.go.jp'
-    RESAS_API_KEY: str = env('RESAS_API_KEY')
+    RESAS_API_KEY: str = os.environ['RESAS_API_KEY']
     calculator: PopulationCalculator
 
     def __init__(self) -> None:
         self.prefectures = self.__fetch_prefectures()
         self.population = self.__fetch_population(self.prefectures)
         self.calculator = PopulationCalculator()
-        print(self.population)
 
     def __get_headers(self):
         return {
@@ -53,12 +50,12 @@ class PopulationProvider():
         population_dict = {}
         for prefecture in prefectures:
             pref_code = prefecture['prefCode']
-            
+
             url = self.RESAS_API_ENDPOINT + f'/api/v1/population/composition/perYear?cityCode=-&prefCode={pref_code}'
 
             response = requests.get(url, headers=headers)
             response.raise_for_status()
-            
+
             print(url, response.status_code)
 
             body_json = json.loads(response.text)
@@ -68,9 +65,9 @@ class PopulationProvider():
                 return
             population = all_population[0]['data']
 
-            #結果をdict形式で格納        
+            #結果をdict形式で格納
             population_dict[pref_code] = {
-                'population': [x for x in population if x['year'] == 2015][0]['value'],
+                'population': [x for x in population if x['year'] == 2020][0]['value'],
                 'prefName': prefecture['prefName']
             }
             #サーバー負荷を下げるため0.3秒停止
@@ -80,47 +77,29 @@ class PopulationProvider():
     def find_population(self, min_diff_keys: list, goal: int):
         cur_answer: int = sum([v['population'] for k, v in self.population.items() if k in min_diff_keys])
         cur_diff: int = abs(cur_answer - goal)
-
+        print(min_diff_keys)
+        #より正解に近い値が見つかった場合は正解を入れ替える
         if cur_diff < self.calculator.min_diff_total:
             self.calculator.min_diff_total = cur_diff
+            self.calculator.answer_list = min_diff_keys
 
         last_answer_index: int = min_diff_keys[-1]
 
         if self.calculator.min_diff_total == 0:
-            pass  
-        elif cur_answer < goal:
-            next_answer_keys = copy.copy(min_diff_keys)
-            self.find_population(next_answer_keys, goal) 
-
-    # def calc(self, answer_keys: list, min_diff_answer: int, goal: int) -> Tuple[int, list]:
-        
-    #     last_answer_index: int = answer_keys[-1]
-    #     cur_answer: int = sum([v['population'] for k, v in self.population.items() if k in answer_keys])
-    #     exists_next_index: bool = (len(self.population) - 1) > last_answer_index
-
-    #     next_answer = None
-    #     #最後の要素を1つ増やす
-    #     if exists_next_index:
-    #         #リストを追加する(ゴール未満かつ現在まで計算した最小の差異よりも小さい場合に再起)
-    #         if cur_answer < goal and abs(goal - min_diff_answer) > abs(goal - cur_answer):
-    #             next_answer_keys = copy.copy(answer_keys)
-    #             next_answer_keys.append(last_answer_index + 1)
-    #             next_answer = self.calc(next_answer_keys, cur_answer, goal)
-    #             #print(next_answer)
-    #         #リストの末尾を１つ進める
-    #         next_answer_keys = copy.copy(answer_keys[0:-1])
-    #         next_answer_keys.append(last_answer_index + 1)
-    #         _answer = self.calc(next_answer_keys, cur_answer, goal)
-    #         if next_answer == None or (abs(goal - next_answer[0]) < abs(goal - next_answer[0])):
-    #             next_answer = _answer
-
-    #     if next_answer != None and abs(goal - next_answer[0]) < abs(goal - cur_answer):
-    #         return next_answer
-    #     else:
-    #         return cur_answer, answer_keys
-
-
+            return min_diff_keys
+        else:
+            #正解よりも値が小さい場合はリストに要素を追加して再帰呼び出し
+            if (cur_answer < goal) and (len(self.population) > last_answer_index):
+                next_answer_keys = copy.copy(min_diff_keys)
+                next_answer_keys.append(last_answer_index + 1)
+                self.find_population(next_answer_keys, goal)
+            #要素の最後の要素を1つ進めて再帰呼び出し
+            if len(self.population) > last_answer_index:
+                next_answer_keys = copy.copy(min_diff_keys[0: -1])
+                next_answer_keys.append(last_answer_index + 1)
+                self.find_population(next_answer_keys, goal)
 
 if __name__ == '__main__':
     prefectures = PopulationProvider()
-    prefectures.loop()
+    prefectures.find_population([1], POPULATION_GOAL)
+    print([v['prefName'] + ':' + str(v['population']) for k, v in prefectures.population.items() if k in prefectures.calculator.answer_list], prefectures.calculator.min_diff_total)
