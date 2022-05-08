@@ -5,6 +5,7 @@ import json
 import time
 import copy
 from typing import Tuple
+import functools
 
 load_dotenv()
 
@@ -70,10 +71,11 @@ class PopulationProvider():
                 'population': [x for x in population if x['year'] == 2020][0]['value'],
                 'prefName': prefecture['prefName']
             }
-            #サーバー負荷を下げるため0.3秒停止
+            #サーバー負荷を下げるため0.2秒停止
             time.sleep(0.2)
         return  population_dict
 
+    #@functools.lru_cache(maxsize=None)#再起処理をメモ化
     def find_population(self, min_diff_keys: list, goal: int):
         cur_answer: int = sum([v['population'] for k, v in self.population.items() if k in min_diff_keys])
         cur_diff: int = abs(cur_answer - goal)
